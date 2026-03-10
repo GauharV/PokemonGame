@@ -30,8 +30,11 @@ public class GameWindow extends JFrame {
     private MainMenuScreen  menuScreen;
     private StarterScreen   starterScreen;
     private OverworldScreen overworldScreen;
+    private WalkingScreen   walkingScreen;
     private BattleScreen    battleScreen;
     private PokedexScreen   pokedexScreen;
+
+    public static final String SCREEN_WALKING = "WALKING";
 
     public GameWindow() {
         setTitle("Pokémon — Kanto Adventure");
@@ -47,12 +50,14 @@ public class GameWindow extends JFrame {
         menuScreen      = new MainMenuScreen(this);
         starterScreen   = new StarterScreen(this);
         overworldScreen = new OverworldScreen(this);
+        walkingScreen   = new WalkingScreen(this);
         battleScreen    = new BattleScreen(this);
         pokedexScreen   = new PokedexScreen(this);
 
         cardPanel.add(menuScreen,      SCREEN_MENU);
         cardPanel.add(starterScreen,   SCREEN_STARTER);
         cardPanel.add(overworldScreen, SCREEN_OVERWORLD);
+        cardPanel.add(walkingScreen,   SCREEN_WALKING);
         cardPanel.add(battleScreen,    SCREEN_BATTLE);
         cardPanel.add(pokedexScreen,   SCREEN_POKEDEX);
 
@@ -83,23 +88,23 @@ public class GameWindow extends JFrame {
     public void showScreen(String name) {
         cardLayout.show(cardPanel, name);
         switch (name) {
-            case SCREEN_MENU      -> menuScreen.onShow();
-            case SCREEN_OVERWORLD -> overworldScreen.onShow(gameState);
-            case SCREEN_POKEDEX   -> pokedexScreen.onShow(gameState);
+            case SCREEN_MENU    -> menuScreen.onShow();
+            case SCREEN_WALKING -> walkingScreen.onShow(gameState);
+            case SCREEN_POKEDEX -> pokedexScreen.onShow(gameState);
         }
     }
 
     public void startNewGame(String playerName, int starterId) {
         Pokemon starter = PokemonDatabase.create(starterId, 5);
         gameState = new GameState(playerName, starter);
-        overworldScreen.onShow(gameState);
-        showScreen(SCREEN_OVERWORLD);
+        walkingScreen.onShow(gameState);
+        showScreen(SCREEN_WALKING);
     }
 
     public void loadGame(GameState loaded) {
         this.gameState = loaded;
-        overworldScreen.onShow(gameState);
-        showScreen(SCREEN_OVERWORLD);
+        walkingScreen.onShow(gameState);
+        showScreen(SCREEN_WALKING);
     }
 
     public void startWildBattle(Pokemon wild) {
@@ -113,8 +118,8 @@ public class GameWindow extends JFrame {
     }
 
     public void endBattle() {
-        overworldScreen.onShow(gameState);
-        showScreen(SCREEN_OVERWORLD);
+        walkingScreen.onShow(gameState);
+        showScreen(SCREEN_WALKING);
     }
 
     public void showPokedex() {

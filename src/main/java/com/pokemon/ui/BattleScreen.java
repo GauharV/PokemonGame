@@ -184,46 +184,57 @@ public class BattleScreen extends JPanel {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,      RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
-        // Sky gradient
-        GradientPaint sky = new GradientPaint(0, 0, new Color(30, 55, 110), 0, h, new Color(18, 32, 65));
-        g.setPaint(sky);
+        // Sky gradient fills the entire panel
+        g.setPaint(new GradientPaint(0, 0, new Color(30, 55, 110), 0, h, new Color(18, 32, 65)));
         g.fillRect(0, 0, w, h);
 
-        // Ground
+        // Ground strip at bottom
         g.setColor(new Color(45, 75, 45));
-        g.fillRoundRect(20, h - 90, w - 40, 75, 24, 24);
+        g.fillRoundRect(w/2 - w*2/5, h - 85, w*4/5, 70, 24, 24);
         g.setColor(new Color(60, 100, 60));
-        g.fillRoundRect(20, h - 90, w - 40, 26, 12, 12);
+        g.fillRoundRect(w/2 - w*2/5, h - 85, w*4/5, 24, 12, 12);
 
-        // Enemy platform
+        // Sprite size — same for both
+        int ss = (int)(h * 0.45);
+        ss = Math.max(160, Math.min(ss, 280));
+
+        // ── Enemy: top-right quadrant ──────────────────────────────────────
+        int ePlatCX = (int)(w * 0.72);  // platform centre X
+        int ePlatY  = (int)(h * 0.14);
+        int ePlatW  = (int)(w * 0.26);
         g.setColor(new Color(80, 65, 45));
-        g.fillOval(480, 70, 320, 56);
+        g.fillOval(ePlatCX - ePlatW/2, ePlatY, ePlatW, 50);
         g.setColor(new Color(105, 85, 58));
-        g.fillOval(486, 70, 308, 30);
+        g.fillOval(ePlatCX - ePlatW/2 + 4, ePlatY, ePlatW - 8, 24);
 
-        // Player platform
-        g.setColor(new Color(80, 65, 45));
-        g.fillOval(60, 205, 250, 48);
-        g.setColor(new Color(105, 85, 58));
-        g.fillOval(66, 205, 238, 26);
-
-        // Enemy Pokemon sprite (top-right)
         if (enemyPokemon != null) {
-            drawSprite(g, enemyImg, enemyPokemon.getId(),
-                    490 + shakeEnemy, 0, 220, 220, false, flashEnemy);
-            drawInfoBox(g, enemyPokemon, 20, 14, false);
+            int ex = ePlatCX - ss/2 + shakeEnemy;
+            int ey = ePlatY  - ss + 14;
+            drawSprite(g, enemyImg, enemyPokemon.getId(), ex, ey, ss, ss, false, flashEnemy);
+            drawInfoBox(g, enemyPokemon, 18, 12, false);
         }
 
-        // Player Pokemon sprite (bottom-left) — mirrored for "back view"
+        // ── Player: bottom-left quadrant ──────────────────────────────────
+        int pPlatCX = (int)(w * 0.28);  // platform centre X
+        int pPlatY  = (int)(h * 0.54);
+        int pPlatW  = (int)(w * 0.22);
+        g.setColor(new Color(80, 65, 45));
+        g.fillOval(pPlatCX - pPlatW/2, pPlatY, pPlatW, 46);
+        g.setColor(new Color(105, 85, 58));
+        g.fillOval(pPlatCX - pPlatW/2 + 4, pPlatY, pPlatW - 8, 22);
+
         if (playerPokemon != null) {
-            drawSprite(g, playerImg, playerPokemon.getId(),
-                    60 + shakePlayer, 140, 220, 220, true, flashPlayer);
-            drawInfoBox(g, playerPokemon, 460, 195, true);
+            int px = pPlatCX - ss/2 + shakePlayer;
+            int py = pPlatY  - ss + 10;
+            drawSprite(g, playerImg, playerPokemon.getId(), px, py, ss, ss, true, flashPlayer);
+            int ibX = (int)(w * 0.50);
+            int ibY = (int)(h * 0.50);
+            drawInfoBox(g, playerPokemon, ibX, ibY, true);
         }
     }
 
     private void drawSprite(Graphics2D g, BufferedImage img, int id,
-                            int x, int y, int w, int h, boolean flip, boolean flash) {
+                             int x, int y, int w, int h, boolean flip, boolean flash) {
         if (img == null) {
             // trigger load, draw placeholder ball
             ImageLoader.getImage(id, loaded -> {
@@ -237,16 +248,20 @@ public class BattleScreen extends JPanel {
         Image scaled = ImageLoader.scaleImage(img, w, h);
         int iw = scaled.getWidth(null), ih = scaled.getHeight(null);
 
-        if (flash) {
-            // White flash composite
-            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.85f));
-        }
         if (flip) {
             g.drawImage(scaled, x + iw, y, -iw, ih, null);
         } else {
             g.drawImage(scaled, x, y, null);
         }
-        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+
+        // White flash overlay drawn on top of sprite
+        if (flash) {
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.55f));
+            g.setColor(Color.WHITE);
+            if (flip) g.fillRect(x, y, iw, ih);
+            else      g.fillRect(x, y, iw, ih);
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+        }
     }
 
     private void drawInfoBox(Graphics2D g, Pokemon p, int x, int y, boolean showHp) {
@@ -288,8 +303,8 @@ public class BattleScreen extends JPanel {
         g.setColor(new Color(30, 35, 55));
         g.fillRoundRect(bx, by, barW, barH, 5, 5);
         Color hpC = hpPct > 0.5 ? new Color(55, 200, 55)
-                : hpPct > 0.25 ? new Color(215, 195, 40)
-                :                new Color(215, 55, 55);
+                  : hpPct > 0.25 ? new Color(215, 195, 40)
+                  :                new Color(215, 55, 55);
         int filled = Math.max(0, (int)(barW * hpPct));
         g.setColor(hpC);
         if (filled > 0) g.fillRoundRect(bx, by, filled, barH, 5, 5);
@@ -563,10 +578,10 @@ public class BattleScreen extends JPanel {
         }
 
         String[] options = new String[]{
-                pb > 0 ? "Pokéball  ×" + pb   : null,
-                gb > 0 ? "Great Ball ×" + gb  : null,
-                ub > 0 ? "Ultra Ball ×" + ub  : null,
-                "Cancel"
+            pb > 0 ? "Pokéball  ×" + pb   : null,
+            gb > 0 ? "Great Ball ×" + gb  : null,
+            ub > 0 ? "Ultra Ball ×" + ub  : null,
+            "Cancel"
         };
         // Filter out nulls
         java.util.List<String> validOpts = new java.util.ArrayList<>();
@@ -692,23 +707,33 @@ public class BattleScreen extends JPanel {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void triggerShake(boolean isPlayer) {
-        if (isPlayer) { shakePlayer = 10; flashPlayer = true; }
-        else          { shakeEnemy  = 10; flashEnemy  = true; }
-        repaint();
+        // Multi-frame shake pattern: left, right, left, right, center
+        final int[] shakePattern = {-14, 12, -10, 8, -6, 5, -3, 2, 0};
+        final int[] frame = {0};
 
-        Timer t = new Timer(40, null);
+        Timer t = new Timer(45, null);
         t.addActionListener(e -> {
-            if (isPlayer) {
-                shakePlayer = -(shakePlayer * 2 / 3);
-                flashPlayer = false;
-                if (Math.abs(shakePlayer) <= 1) { shakePlayer = 0; t.stop(); }
+            int f = frame[0];
+            if (f < shakePattern.length) {
+                if (isPlayer) {
+                    shakePlayer  = shakePattern[f];
+                    flashPlayer  = (f < 2); // flash on first 2 frames only
+                } else {
+                    shakeEnemy   = shakePattern[f];
+                    flashEnemy   = (f < 2);
+                }
             } else {
-                shakeEnemy = -(shakeEnemy * 2 / 3);
-                flashEnemy = false;
-                if (Math.abs(shakeEnemy) <= 1) { shakeEnemy = 0; t.stop(); }
+                if (isPlayer) { shakePlayer = 0; flashPlayer = false; }
+                else          { shakeEnemy  = 0; flashEnemy  = false; }
+                t.stop();
             }
+            frame[0]++;
             repaint();
         });
+        // Start immediately with first frame
+        if (isPlayer) { shakePlayer = shakePattern[0]; flashPlayer = true; }
+        else          { shakeEnemy  = shakePattern[0]; flashEnemy  = true; }
+        repaint();
         t.start();
     }
 
