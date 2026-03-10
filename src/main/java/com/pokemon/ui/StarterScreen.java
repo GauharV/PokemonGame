@@ -113,7 +113,7 @@ public class StarterScreen extends JPanel {
         JPanel card = new JPanel() {
             @Override protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
-                drawCard((Graphics2D) g, index, template, typeColor);
+                drawCard((Graphics2D) g, index, template, typeColor, getWidth(), getHeight());
             }
         };
         card.setOpaque(false);
@@ -128,8 +128,7 @@ public class StarterScreen extends JPanel {
         return card;
     }
 
-    private void drawCard(Graphics2D g, int index, Pokemon template, Color accent) {
-        int w = getWidth(), h = getHeight();
+    private void drawCard(Graphics2D g, int index, Pokemon template, Color accent, int w, int h) {
         boolean hovered = (hoveredCard == index);
 
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,      RenderingHints.VALUE_ANTIALIAS_ON);
@@ -226,6 +225,7 @@ public class StarterScreen extends JPanel {
     }
 
     private void confirmChoice(int index, int id, String name) {
+        SoundManager.play(SoundManager.SoundEffect.MENU_SELECT);
         int opt = JOptionPane.showConfirmDialog(this,
                 playerName + " chose " + name + "!\nStart your adventure together?",
                 "Confirm Choice", JOptionPane.YES_NO_OPTION);

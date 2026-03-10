@@ -1,10 +1,6 @@
 package com.pokemon.util;
 
-import javazoom.jl.player.Player;
-
 import javax.sound.sampled.*;
-import java.io.BufferedInputStream;
-import java.io.InputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -23,7 +19,6 @@ public class SoundManager {
     private static Thread musicThread;
     private static volatile boolean musicPlaying = false;
     private static volatile boolean stopMusic    = false;
-    private static volatile Player  currentPlayer = null;  // ← hold reference so we can close it
 
     public enum SoundEffect {
         BATTLE_START, MOVE_HIT, SUPER_EFFECTIVE, NOT_VERY_EFFECTIVE,
@@ -47,7 +42,7 @@ public class SoundManager {
         }
     }
 
-    // ── Battle music (loops the MP3 until stopped) ────────────────────────────
+    // ── Battle music (synthesized) ────────────────────────────────────────────
 
     private static void startBattleMusic() {
         if (musicPlaying) return;         // already playing
@@ -55,20 +50,15 @@ public class SoundManager {
         musicPlaying = true;
 
         musicThread = new Thread(() -> {
+            // Play a simple synthesized battle theme loop
             while (!stopMusic) {
                 try {
-                    InputStream raw = SoundManager.class
-                            .getResourceAsStream("/battle_theme.mp3");
-                    if (raw == null) {
-                        System.err.println("battle_theme.mp3 not found in resources!");
-                        musicPlaying = false;
-                        return;
-                    }
-                    currentPlayer = new Player(new BufferedInputStream(raw));
-                    currentPlayer.play();   // blocks until track ends OR close() is called
-                    currentPlayer = null;
+                    // Simple battle theme melody
+                    int[] freqs = {392,392,392,392,494,494,494,494,523,523,523,523};
+                    int[] durs  = {250,250,250,250,250,250,250,250,250,250,250,1000};
+                    safePlayTone(freqs, durs, 0.3f);
                 } catch (Exception e) {
-                    if (!stopMusic) e.printStackTrace();
+                    if (!stopMusic) System.err.println("Music playback error: " + e.getMessage());
                 }
             }
             musicPlaying = false;
@@ -81,10 +71,6 @@ public class SoundManager {
     public static void stopBattleMusic() {
         stopMusic    = true;
         musicPlaying = false;
-        if (currentPlayer != null) {
-            try { currentPlayer.close(); } catch (Exception ignored) {}
-            currentPlayer = null;
-        }
         if (musicThread != null) musicThread.interrupt();
     }
 

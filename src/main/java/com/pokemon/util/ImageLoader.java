@@ -5,173 +5,157 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.*;
-import java.net.URI;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+/**
+ * Loads Pokemon sprites from the bundled resources/sprites/ folder.
+ *
+ * Put your PNG files in:  src/main/resources/sprites/1.png, 2.png, ...
+ * Run download_sprites.py once to populate that folder.
+ */
 public class ImageLoader {
 
-    // Official high-res artwork (PNG, ~475x475)
-    private static final String ARTWORK_URL = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/%d.png";
-    // Smaller sprites as fallback
-    private static final String SPRITE_URL  = "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/%d.png";
+    private static final Map<Integer, BufferedImage> cache   = new ConcurrentHashMap<>();
+    private static final Map<Integer, Boolean>       loading = new ConcurrentHashMap<>();
 
-    private static final String CACHE_DIR = System.getProperty("user.home") + "/.pokemon_game/sprites/";
-
-    private static final Map<Integer, BufferedImage> memoryCache = new ConcurrentHashMap<>();
-    private static final Map<Integer, Boolean> loading = new ConcurrentHashMap<>();
-
-    // Placeholder image while loading
-    private static BufferedImage placeholder;
-
-    static {
-        // Create cache directory
-        try { Files.createDirectories(Paths.get(CACHE_DIR)); } catch (Exception ignored) {}
-        // Create placeholder
-        placeholder = createPlaceholder();
-    }
+    // ── Load ──────────────────────────────────────────────────────────────────
 
     /**
-     * Get a Pokemon image. Returns placeholder immediately and calls callback
-     * when the real image is loaded (on the EDT).
+     * Returns the image immediately if cached, otherwise returns a placeholder
+     * and calls onLoad on the EDT when done.
      */
     public static BufferedImage getImage(int pokemonId, Consumer<BufferedImage> onLoad) {
-        // Already in memory
-        if (memoryCache.containsKey(pokemonId)) {
-            return memoryCache.get(pokemonId);
-        }
+        if (cache.containsKey(pokemonId)) return cache.get(pokemonId);
+        if (Boolean.TRUE.equals(loading.get(pokemonId))) return placeholder(pokemonId);
 
-        // Already loading
-        if (Boolean.TRUE.equals(loading.get(pokemonId))) {
-            return placeholder;
-        }
-
-        // Start async load
         loading.put(pokemonId, true);
-        SwingWorker<BufferedImage, Void> worker = new SwingWorker<>() {
-            @Override
-            protected BufferedImage doInBackground() {
-                return loadImage(pokemonId);
+        new SwingWorker<BufferedImage, Void>() {
+            @Override protected BufferedImage doInBackground() {
+                return loadFromResources(pokemonId);
             }
-
-            @Override
-            protected void done() {
+            @Override protected void done() {
                 try {
                     BufferedImage img = get();
-                    if (img != null) {
-                        memoryCache.put(pokemonId, img);
-                        if (onLoad != null) onLoad.accept(img);
-                    }
+                    if (img == null) img = placeholder(pokemonId);
+                    cache.put(pokemonId, img);
+                    if (onLoad != null) onLoad.accept(img);
                 } catch (Exception e) {
-                    System.err.println("Failed to load image for Pokemon #" + pokemonId);
+                    System.err.println("[ImageLoader] error for #" + pokemonId + ": " + e.getMessage());
                 } finally {
                     loading.remove(pokemonId);
                 }
             }
-        };
-        worker.execute();
-        return placeholder;
+        }.execute();
+
+        return placeholder(pokemonId);
     }
 
-    /** Synchronous load - use only for non-UI thread */
     public static BufferedImage getImageSync(int pokemonId) {
-        if (memoryCache.containsKey(pokemonId)) return memoryCache.get(pokemonId);
-        BufferedImage img = loadImage(pokemonId);
-        if (img != null) memoryCache.put(pokemonId, img);
-        return img != null ? img : placeholder;
-    }
-
-    private static BufferedImage loadImage(int pokemonId) {
-        // 1. Check disk cache
-        String cachePath = CACHE_DIR + pokemonId + ".png";
-        File cacheFile = new File(cachePath);
-        if (cacheFile.exists() && cacheFile.length() > 0) {
-            try {
-                return ImageIO.read(cacheFile);
-            } catch (IOException e) {
-                cacheFile.delete(); // corrupt cache, re-download
-            }
-        }
-
-        // 2. Download official artwork
-        BufferedImage img = downloadImage(String.format(ARTWORK_URL, pokemonId));
-
-        // 3. Fallback to sprite if artwork failed
-        if (img == null) {
-            img = downloadImage(String.format(SPRITE_URL, pokemonId));
-        }
-
-        // 4. Save to disk cache
-        if (img != null) {
-            try {
-                ImageIO.write(img, "PNG", cacheFile);
-            } catch (IOException ignored) {}
-        }
-
+        if (cache.containsKey(pokemonId)) return cache.get(pokemonId);
+        BufferedImage img = loadFromResources(pokemonId);
+        if (img == null) img = placeholder(pokemonId);
+        cache.put(pokemonId, img);
         return img;
     }
 
-    private static BufferedImage downloadImage(String urlString) {
+    // ── Internal load ─────────────────────────────────────────────────────────
+
+    private static BufferedImage loadFromResources(int pokemonId) {
+        String fileName = pokemonId + ".png";
+
+        // 1. Try classpath (works after mvn package or when resources are on classpath)
         try {
-            URL url = URI.create(urlString).toURL();
-            var connection = url.openConnection();
-            connection.setConnectTimeout(5000);
-            connection.setReadTimeout(10000);
-            connection.setRequestProperty("User-Agent", "PokemonGame/1.0");
-            try (InputStream is = connection.getInputStream()) {
-                return ImageIO.read(is);
+            URL url = ImageLoader.class.getResource("/sprites/" + fileName);
+            if (url != null) {
+                BufferedImage img = ImageIO.read(url);
+                if (img != null) {
+                    System.out.println("[ImageLoader] Classpath OK: #" + pokemonId);
+                    return img;
+                }
             }
-        } catch (Exception e) {
-            return null;
+        } catch (Exception e) { /* try next */ }
+
+        // 2. Try every likely absolute and relative path
+        String home = System.getProperty("user.home");
+        String userDir = System.getProperty("user.dir");
+        String[] paths = {
+            // Exact path where download_sprites.py saved them on Windows
+            home + "\\.vscode\\PokemonGame\\src\\main\\resources\\sprites\\" + fileName,
+            home + "/PokemonGame/src/main/resources/sprites/" + fileName,
+            // Relative to wherever Java's working directory is
+            userDir + "/src/main/resources/sprites/" + fileName,
+            userDir + "\\src\\main\\resources\\sprites\\" + fileName,
+            "src/main/resources/sprites/" + fileName,
+            "sprites/" + fileName,
+        };
+
+        for (String p : paths) {
+            File f = new File(p);
+            if (f.exists() && f.length() > 500) {
+                try {
+                    BufferedImage img = ImageIO.read(f);
+                    if (img != null) {
+                        System.out.println("[ImageLoader] Found at: " + p);
+                        return img;
+                    }
+                } catch (Exception e) { /* try next */ }
+            }
         }
+
+        // 3. Print all tried paths so the user can see what's wrong
+        System.err.println("[ImageLoader] NOT FOUND #" + pokemonId);
+        System.err.println("  user.home = " + home);
+        System.err.println("  user.dir  = " + userDir);
+        System.err.println("  Tried paths:");
+        for (String p : paths) System.err.println("    " + p + " -> exists=" + new File(p).exists());
+        return null;
     }
 
-    /** Scale image to fit within target dimensions while maintaining aspect ratio */
+    // ── Scale ─────────────────────────────────────────────────────────────────
+
     public static Image scaleImage(BufferedImage img, int targetW, int targetH) {
-        if (img == null) return placeholder.getScaledInstance(targetW, targetH, Image.SCALE_SMOOTH);
-        double scale = Math.min((double) targetW / img.getWidth(), (double) targetH / img.getHeight());
-        int w = (int)(img.getWidth() * scale);
-        int h = (int)(img.getHeight() * scale);
+        if (img == null) return placeholder(0).getScaledInstance(targetW, targetH, Image.SCALE_SMOOTH);
+        double scale = Math.min((double) targetW / img.getWidth(),
+                                (double) targetH / img.getHeight());
+        int w = Math.max(1, (int)(img.getWidth()  * scale));
+        int h = Math.max(1, (int)(img.getHeight() * scale));
         return img.getScaledInstance(w, h, Image.SCALE_SMOOTH);
     }
 
-    private static BufferedImage createPlaceholder() {
+    // ── Placeholder ───────────────────────────────────────────────────────────
+
+    public static BufferedImage placeholder(int id) {
         BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Draw Pokéball silhouette
-        g.setColor(new Color(60, 60, 60));
+        float hue = (id * 37f % 360f) / 360f;
+        Color base = Color.getHSBColor(hue, 0.55f, 0.60f);
+        g.setColor(base);
         g.fillOval(10, 10, 180, 180);
-        g.setColor(new Color(200, 50, 50));
-        g.fillArc(10, 10, 180, 180, 0, 180);
-        g.setColor(new Color(40, 40, 40));
-        g.fillRect(10, 96, 180, 8);
-        g.setColor(new Color(80, 80, 80));
-        g.fillOval(80, 82, 40, 40);
-        g.setColor(new Color(50, 50, 50, 120));
-        g.fillOval(85, 87, 30, 30);
+        g.setColor(base.darker());
+        g.setStroke(new java.awt.BasicStroke(4));
+        g.drawOval(10, 10, 180, 180);
 
-        g.setColor(new Color(180, 180, 180));
-        g.setFont(new Font("Arial", Font.BOLD, 12));
-        g.drawString("Loading...", 65, 170);
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial Black", Font.BOLD, 30));
+        String lbl = "#" + id;
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(lbl, 100 - fm.stringWidth(lbl) / 2, 108);
+
+        g.setFont(new Font("Arial", Font.PLAIN, 12));
+        g.setColor(new Color(255, 255, 200));
+        g.drawString("No sprite", 62, 135);
+        g.drawString("Run download_sprites.py", 18, 153);
+
         g.dispose();
         return img;
     }
 
-    public static BufferedImage getPlaceholder() { return placeholder; }
-
-    public static void preloadBatch(int[] ids) {
-        for (int id : ids) {
-            if (!memoryCache.containsKey(id)) {
-                getImage(id, null);
-            }
-        }
-    }
-
-    public static void clearMemoryCache() { memoryCache.clear(); }
+    public static BufferedImage getPlaceholder() { return placeholder(0); }
+    public static void preloadBatch(int[] ids) { for (int id : ids) getImage(id, null); }
+    public static void clearMemoryCache() { cache.clear(); }
 }
