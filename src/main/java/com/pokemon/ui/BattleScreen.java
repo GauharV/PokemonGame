@@ -193,39 +193,39 @@ public class BattleScreen extends JPanel {
         g.setColor(new Color(60, 100, 60));
         g.fillRoundRect(40, h - 75, w - 80, 22, 10, 10);
 
-        // Fixed sprite size 200px — always fits
-        int ss = 200;
+        // Sprite size
+        int ss = 160;
 
-        // ── Enemy: right, upper area — platform placed so sprite NEVER clips ──
+        // ── Enemy: right side — upper third of panel ──────────────────────
         int ePlatCX = w * 3 / 4;
         int ePlatW  = w / 4;
-        int ePlatY  = ss + 20;   // platform is always below ss px from top
+        int ePlatY  = (int)(h * 0.38);   // platform at 38% down
         g.setColor(new Color(80, 65, 45));
-        g.fillOval(ePlatCX - ePlatW/2, ePlatY, ePlatW, 40);
+        g.fillOval(ePlatCX - ePlatW/2, ePlatY, ePlatW, 36);
         g.setColor(new Color(105, 85, 58));
-        g.fillOval(ePlatCX - ePlatW/2 + 4, ePlatY, ePlatW - 8, 18);
+        g.fillOval(ePlatCX - ePlatW/2 + 4, ePlatY, ePlatW - 8, 16);
 
         if (enemyPokemon != null) {
             int ex = ePlatCX - ss/2 + shakeEnemy;
-            int ey = ePlatY - ss + 12;
+            int ey = ePlatY - ss + 10;   // sprite sits on platform
             drawSprite(g, enemyImg, enemyPokemon.getId(), ex, ey, ss, ss, false, flashEnemy);
-            drawInfoBox(g, enemyPokemon, 18, 10, false);
+            drawInfoBox(g, enemyPokemon, 18, 8, false);
         }
 
-        // ── Player: left, lower area ───────────────────────────────────────
+        // ── Player: left side — lower third of panel ──────────────────────
         int pPlatCX = w / 4;
         int pPlatW  = w / 5;
-        int pPlatY  = h - 140;
+        int pPlatY  = (int)(h * 0.82);   // platform at 82% down
         g.setColor(new Color(80, 65, 45));
-        g.fillOval(pPlatCX - pPlatW/2, pPlatY, pPlatW, 36);
+        g.fillOval(pPlatCX - pPlatW/2, pPlatY, pPlatW, 30);
         g.setColor(new Color(105, 85, 58));
-        g.fillOval(pPlatCX - pPlatW/2 + 4, pPlatY, pPlatW - 8, 16);
+        g.fillOval(pPlatCX - pPlatW/2 + 4, pPlatY, pPlatW - 8, 14);
 
         if (playerPokemon != null) {
             int px = pPlatCX - ss/2 + shakePlayer;
-            int py = pPlatY - ss + 10;
+            int py = pPlatY - ss + 8;
             drawSprite(g, playerImg, playerPokemon.getId(), px, py, ss, ss, true, flashPlayer);
-            drawInfoBox(g, playerPokemon, w / 2 + 10, pPlatY - 10, true);
+            drawInfoBox(g, playerPokemon, w / 2 + 10, pPlatY - 8, true);
         }
     }
 
