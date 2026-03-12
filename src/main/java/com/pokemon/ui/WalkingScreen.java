@@ -8,7 +8,6 @@ import com.pokemon.model.Pokemon;
 import com.pokemon.util.SoundManager;
 
 import javax.swing.*;
-import javax.swing.Timer;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
@@ -47,8 +46,8 @@ public class WalkingScreen extends JPanel implements KeyListener {
     private static boolean isSolid(int t) {
         return t == T_TREE || t == T_WATER  || t == T_HOUSE    || t == T_ROCK
             || t == T_SIGN || t == T_HOUSE_DOOR
-            || t == T_CENTER_WALL || t == T_MART_WALL;
-        // NOTE: T_CENTER_DOOR and T_MART_DOOR are WALKABLE — stepping on them auto-triggers
+            || t == T_CENTER_WALL || t == T_MART_WALL
+            || t == T_CENTER_DOOR || t == T_MART_DOOR;  // solid — face + ENTER to use
     }
 
     // ── Sizes ─────────────────────────────────────────────────────────────────
@@ -193,8 +192,10 @@ public class WalkingScreen extends JPanel implements KeyListener {
         if (fc == null) { hintText = null; repaint(); return; }
         int ft = map[fc[1]][fc[0]];
         hintText = switch (ft) {
-            case T_SIGN -> "Press ENTER to read the sign";
-            default     -> null;
+            case T_SIGN        -> "Press ENTER to read the sign";
+            case T_CENTER_DOOR -> "Press ENTER to enter Pokémon Center";
+            case T_MART_DOOR   -> "Press ENTER to enter Pokémart";
+            default            -> null;
         };
         repaint();
     }
@@ -239,6 +240,8 @@ public class WalkingScreen extends JPanel implements KeyListener {
             case T_SIGN -> JOptionPane.showMessageDialog(this,
                     "Welcome to " + currentMapName + "!\nExplore routes and catch wild Pokémon!",
                     "Sign", JOptionPane.PLAIN_MESSAGE);
+            case T_CENTER_DOOR -> healParty();
+            case T_MART_DOOR   -> openMart();
         }
         requestFocusInWindow();
     }
@@ -578,14 +581,17 @@ public class WalkingScreen extends JPanel implements KeyListener {
         g.setColor(new Color(255, 215, 0)); g.drawString("$" + gameState.getMoney(), 280, 23);
         g.setColor(new Color(200, 200, 225));
         g.drawString("⚪" + gameState.getPokeballs() + "  🔵" + gameState.getGreatballs() + "  🟡" + gameState.getUltraballs(), 365, 23);
-        hudBtn(g, sw-255, 5, 80, 26, "POKÉDEX", new Color(50,75,185));
-        hudBtn(g, sw-165, 5, 58, 26, "PARTY",   new Color(35,115,40));
-        hudBtn(g, sw- 97, 5, 52, 26, "SAVE",    new Color(115,85,28));
-        hudBtn(g, sw- 36, 5, 30, 26, "≡",       new Color(130,38,38));
+        // Right-side buttons
+        hudBtn(g, sw-370, 5, 80, 26, "POKÉDEX", new Color(50,75,185));
+        hudBtn(g, sw-280, 5, 55, 26, "PARTY",   new Color(35,115,40));
+        hudBtn(g, sw-215, 5, 48, 26, "SAVE",    new Color(115,85,28));
+        hudBtn(g, sw-157, 5, 46, 26, "HEAL ❤",  new Color(180,40,40));
+        hudBtn(g, sw- 99, 5, 55, 26, "MART $",  new Color(40,80,180));
+        hudBtn(g, sw- 36, 5, 30, 26, "≡",       new Color(80,80,80));
         g.setColor(new Color(0,0,0,130)); g.fillRect(0, sh-26, sw, 26);
         g.setFont(new Font("SansSerif", Font.PLAIN, 10));
         g.setColor(new Color(155,155,175));
-        g.drawString("Arrow keys/WASD: Move   ENTER: Use door or sign (stand in front, face it)", 12, sh-8);
+        g.drawString("Arrow keys/WASD: Move", 12, sh-8);
     }
 
     private void hudBtn(Graphics2D g, int x, int y, int w, int h, String lbl, Color c) {
@@ -604,9 +610,11 @@ public class WalkingScreen extends JPanel implements KeyListener {
             @Override public void mouseClicked(MouseEvent e) {
                 int sw=getWidth(), x=e.getX(), y=e.getY();
                 if (y<5||y>31) return;
-                if      (x>=sw-255&&x<=sw-175) window.showPokedex();
-                else if (x>=sw-165&&x<=sw-107) showParty();
-                else if (x>=sw- 97&&x<=sw- 45) doSave();
+                if      (x>=sw-370&&x<=sw-290) window.showPokedex();
+                else if (x>=sw-280&&x<=sw-225) showParty();
+                else if (x>=sw-215&&x<=sw-167) doSave();
+                else if (x>=sw-157&&x<=sw-111) healParty();
+                else if (x>=sw- 99&&x<=sw- 44) openMart();
                 else if (x>=sw- 36)            window.showScreen(GameWindow.SCREEN_MENU);
             }
         });
@@ -706,7 +714,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
             {1,0,0,0,0,0,0,0, 0,0, 2,0,0,0,0,0,0,0,0,0,1},
             {1,0,4,4,4,0, 0,15,15, 0,2,0,14,14,0,0,4,4,4,0,1},
             {1,0,4,4,4,0, 0,15,15, 0,2,0,14,14,0,0,4,4,4,0,1},
-            {1,0,0,0,0,0, 0,5, 2,  0,2,0,5,  2,0,0,0,0,0,0,1},  // doors — plain, do nothing
+            {1,0,0,0,0,0, 0,16, 2,  0,2,0,17,  2,0,0,0,0,0,0,1},  // PkCenter=16, Mart=17 — face+ENTER
             {1,0,0,0,0,0, 0, 0,0,  0,2,0, 0, 0,0,0,0,0,0,0,1},  // player stands HERE to use door
             {1,0,0,6,6,0, 0, 0,0,  0,2,0, 0, 0,0,0,6,6,0,0,1},
             {1,0,6,6,6,6, 0, 0,9,  0,2,0, 9, 0,0,6,6,6,6,0,1},
@@ -752,7 +760,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
             {1,0,0,0,0,0,0,0, 0,0, 2,0,0,0,0,0,0,0,0,0,1},
             {1,0,4,4,4,0, 0,15,15, 0,2,0,14,14,0,0,4,4,4,0,1},
             {1,0,4,4,4,0, 0,15,15, 0,2,0,14,14,0,0,4,4,4,0,1},
-            {1,0,0,0,0,0, 0,5,  2, 0,2,0,5,  2,0,0,0,0,0,0,1},  // doors — plain, do nothing
+            {1,0,0,0,0,0, 0,16,  2, 0,2,0,17,  2,0,0,0,0,0,0,1},  // PkCenter=16, Mart=17 — face+ENTER
             {1,0,0,0,0,0, 0, 0, 0, 0,2,0, 0, 0,0,0,0,0,0,0,1},
             {3,3,3,0,0,0, 0, 0, 0, 0,2,0, 0, 0,0,0,0,0,3,3,3},
             {3,3,3,0,6,6, 0, 0, 9, 0,2,0, 9, 0,0,6,6,0,3,3,3},
@@ -782,8 +790,8 @@ public class WalkingScreen extends JPanel implements KeyListener {
             }
         m[1][COLS/2]=T_EXIT_N;
         m[ROWS-2][COLS/2]=T_EXIT_S;
-        m[3][4]=T_CENTER_WALL; m[3][5]=T_CENTER_WALL; m[4][4]=T_HOUSE_DOOR;
-        m[3][COLS-5]=T_MART_WALL; m[3][COLS-4]=T_MART_WALL; m[4][COLS-5]=T_HOUSE_DOOR;
+        m[3][4]=T_CENTER_WALL; m[3][5]=T_CENTER_WALL; m[4][4]=T_CENTER_DOOR;
+        m[3][COLS-5]=T_MART_WALL; m[3][COLS-4]=T_MART_WALL; m[4][COLS-5]=T_MART_DOOR;
         SPAWNS.put(name, new int[]{COLS/2, ROWS/2});
         return m;
     }
