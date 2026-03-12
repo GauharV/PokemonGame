@@ -10,9 +10,11 @@ import com.pokemon.util.SoundManager;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.image.BufferedImage;
-import java.util.*;
-import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Random;
 
 /**
  * Top-down tile overworld.
@@ -31,7 +33,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
     static final int T_HOUSE       =  4;
     static final int T_HOUSE_DOOR  =  5;  // solid — no interaction
     static final int T_FLOWER      =  6;
-    static final int T_SAND        =  7;
+    @SuppressWarnings("unused") static final int T_SAND        =  7;
     static final int T_ROCK        =  8;
     static final int T_SIGN        =  9;  // solid — face + ENTER
     static final int T_EXIT_N      = 10;  // walkable → travel
@@ -70,7 +72,8 @@ public class WalkingScreen extends JPanel implements KeyListener {
 
     // ── Input ─────────────────────────────────────────────────────────────────
     private final Set<Integer> heldKeys = new HashSet<>();
-    private Timer walkTimer, animTimer;
+    private final javax.swing.Timer walkTimer;
+    private final javax.swing.Timer animTimer;
     private int   animTick = 0;
 
     // ── Wild encounter ────────────────────────────────────────────────────────
@@ -99,15 +102,21 @@ public class WalkingScreen extends JPanel implements KeyListener {
         this.window = w;
         setBackground(new Color(15, 22, 15));
         setFocusable(true);
-        addKeyListener(this);
-        walkTimer = new Timer(16, e -> tickWalk());
-        animTimer = new Timer(130, e -> {
+        walkTimer = new javax.swing.Timer(16, e -> tickWalk());
+        animTimer = new javax.swing.Timer(130, e -> {
             animTick++;
             walkFrame = walking ? (walkFrame + 1) % 4 : 0;
             repaint();
         });
         walkTimer.start();
         animTimer.start();
+    }
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        addKeyListener(this);
+        registerMouseListener();
     }
 
     public void onShow(GameState gs) {
@@ -133,6 +142,12 @@ public class WalkingScreen extends JPanel implements KeyListener {
         grassSteps  = 0;
         stepsNeeded = 10 + new Random().nextInt(8);
         hintText    = null;
+        // Debug: print door tile positions
+        System.out.println("[DEBUG] Loaded map: " + name + "  spawn=(" + playerTileX + "," + playerTileY + ")");
+        for (int row = 0; row < map.length; row++)
+            for (int col = 0; col < map[row].length; col++)
+                if (map[row][col] == 16 || map[row][col] == 17)
+                    System.out.println("[DEBUG]   tile " + map[row][col] + " at col=" + col + " row=" + row);
         repaint();
     }
 
@@ -162,6 +177,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
 
     private void onArrived() {
         int tile = map[playerTileY][playerTileX];
+        System.out.println("[DEBUG] onArrived tile=" + tile + " at (" + playerTileX + "," + playerTileY + ")");
 
         // Auto-travel on route exit tiles
         if (tile >= T_EXIT_N && tile <= T_EXIT_W) {
@@ -171,12 +187,14 @@ public class WalkingScreen extends JPanel implements KeyListener {
 
         // Pokémon Center door
         if (tile == T_CENTER_DOOR) {
+            System.out.println("[DEBUG] CENTER DOOR triggered!");
             healParty();
             return;
         }
 
         // Pokémart door
         if (tile == T_MART_DOOR) {
+            System.out.println("[DEBUG] MART DOOR triggered!");
             openMart();
             return;
         }
@@ -296,9 +314,11 @@ public class WalkingScreen extends JPanel implements KeyListener {
         g.setStroke(new BasicStroke(2));
         g.drawRoundRect(bx, by, bw, bh, 16, 16);
 
-        if (overlayMode == 1) drawCenterOverlay(g, bx, by, bw, bh);
-        else if (overlayMode == 2) drawMartOverlay(g, bx, by, bw, bh);
-        else if (overlayMode == 3) drawMartQtyOverlay(g, bx, by, bw, bh);
+        switch (overlayMode) {
+            case 1 -> drawCenterOverlay(g, bx, by, bw, bh);
+            case 2 -> drawMartOverlay(g, bx, by, bw, bh);
+            case 3 -> drawMartQtyOverlay(g, bx, by, bw, bh);
+        }
     }
 
     private void drawCenterOverlay(Graphics2D g, int bx, int by, int bw, int bh) {
@@ -419,9 +439,11 @@ public class WalkingScreen extends JPanel implements KeyListener {
                     overlayMsg = "Not enough money!"; overlayMode = 2; repaint();
                 } else {
                     gameState.spendMoney(total);
-                    if      (martSel == 0) gameState.addPokeballs(martQty);
-                    else if (martSel == 1) gameState.addGreatballs(martQty);
-                    else                   gameState.addUltraballs(martQty);
+                    switch (martSel) {
+                        case 0 -> gameState.addPokeballs(martQty);
+                        case 1 -> gameState.addGreatballs(martQty);
+                        case 2 -> gameState.addUltraballs(martQty);
+                    }
                     overlayMsg = "Bought " + martQty + "× " + BALL_NAMES[martSel] + "!";
                     overlayMode = 2;
                     repaint();
@@ -455,7 +477,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
     private void doTransition(String dest) {
         walking = false;
         heldKeys.clear();
-        Timer out = new Timer(18, null);
+        javax.swing.Timer out = new javax.swing.Timer(18, null);
         float[] a = {0f};
         out.addActionListener(e -> {
             a[0] = Math.min(1f, a[0] + 0.09f);
@@ -465,7 +487,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
                 out.stop();
                 gameState.setCurrentLocation(dest);
                 loadMap(dest);
-                Timer in = new Timer(18, null);
+                javax.swing.Timer in = new javax.swing.Timer(18, null);
                 float[] b = {1f};
                 in.addActionListener(e2 -> {
                     b[0] = Math.max(0f, b[0] - 0.09f);
@@ -487,7 +509,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
         if (enc == null) { walkTimer.start(); return; }
         Pokemon wild = PokemonDatabase.create(enc[0], enc[1]);
         SoundManager.play(SoundManager.SoundEffect.WILD_ENCOUNTER);
-        Timer t = new Timer(280, e -> { ((Timer)e.getSource()).stop(); walkTimer.start(); window.startWildBattle(wild); });
+        javax.swing.Timer t = new javax.swing.Timer(280, e -> { ((javax.swing.Timer)e.getSource()).stop(); walkTimer.start(); window.startWildBattle(wild); });
         t.setRepeats(false);
         t.start();
     }
@@ -605,19 +627,20 @@ public class WalkingScreen extends JPanel implements KeyListener {
                 // Arrow
                 g.setColor(new Color(30, 120, 30));
                 int ax = tx+TILE/2, ay = ty+TILE/2;
-                int[] axp, ayp;
-                if      (type==T_EXIT_N){axp=new int[]{ax,ax-9,ax+9};ayp=new int[]{ay-11,ay+8,ay+8};}
-                else if (type==T_EXIT_S){axp=new int[]{ax,ax-9,ax+9};ayp=new int[]{ay+11,ay-8,ay-8};}
-                else if (type==T_EXIT_E){axp=new int[]{ax+11,ax-8,ax-8};ayp=new int[]{ay,ay-9,ay+9};}
-                else                   {axp=new int[]{ax-11,ax+8,ax+8};ayp=new int[]{ay,ay-9,ay+9};}
-                g.fillPolygon(axp, ayp, 3);
+            int[] axp = new int[3], ayp = new int[3];
+            switch(type) {
+                case T_EXIT_N -> {axp[0]=ax;axp[1]=ax-9;axp[2]=ax+9;ayp[0]=ay-11;ayp[1]=ay+8;ayp[2]=ay+8;}
+                case T_EXIT_S -> {axp[0]=ax;axp[1]=ax-9;axp[2]=ax+9;ayp[0]=ay+11;ayp[1]=ay-8;ayp[2]=ay-8;}
+                case T_EXIT_E -> {axp[0]=ax+11;axp[1]=ax-8;axp[2]=ax-8;ayp[0]=ay;ayp[1]=ay-9;ayp[2]=ay+9;}
+                default -> {axp[0]=ax-11;axp[1]=ax+8;axp[2]=ax+8;ayp[0]=ay;ayp[1]=ay-9;ayp[2]=ay+9;}
+            }
+            g.fillPolygon(axp, ayp, 3);
 
-                // Destination label — floating sign above/beside the exit tile
-                String dest = getDestination(type);
-                if (dest != null) {
-                    g.setFont(new Font("Arial Black", Font.BOLD, 11));
-                    FontMetrics fm = g.getFontMetrics();
-                    int lw = fm.stringWidth(dest);
+            String dest = getDestination(type);
+            if (dest != null) {
+                g.setFont(new Font("Arial Black", Font.BOLD, 11));
+                FontMetrics fm = g.getFontMetrics();
+                int lw = fm.stringWidth(dest);
                     int lh = 18;
                     int lx = tx + TILE/2 - lw/2 - 6;
                     int ly = ty - lh - 4;  // float above the tile
@@ -724,12 +747,9 @@ public class WalkingScreen extends JPanel implements KeyListener {
         g.setColor(new Color(255, 215, 0)); g.drawString("$" + gameState.getMoney(), 280, 23);
         g.setColor(new Color(200, 200, 225));
         g.drawString("⚪" + gameState.getPokeballs() + "  🔵" + gameState.getGreatballs() + "  🟡" + gameState.getUltraballs(), 365, 23);
-        // Right-side buttons
-        hudBtn(g, sw-370, 5, 80, 26, "POKÉDEX", new Color(50,75,185));
-        hudBtn(g, sw-280, 5, 55, 26, "PARTY",   new Color(35,115,40));
-        hudBtn(g, sw-215, 5, 48, 26, "SAVE",    new Color(115,85,28));
-        hudBtn(g, sw-157, 5, 46, 26, "HEAL ❤",  new Color(180,40,40));
-        hudBtn(g, sw- 99, 5, 55, 26, "MART $",  new Color(40,80,180));
+        hudBtn(g, sw-255, 5, 80, 26, "POKÉDEX", new Color(50,75,185));
+        hudBtn(g, sw-165, 5, 58, 26, "PARTY",   new Color(35,115,40));
+        hudBtn(g, sw- 97, 5, 52, 26, "SAVE",    new Color(115,85,28));
         hudBtn(g, sw- 36, 5, 30, 26, "≡",       new Color(80,80,80));
         g.setColor(new Color(0,0,0,130)); g.fillRect(0, sh-26, sw, 26);
         g.setFont(new Font("SansSerif", Font.PLAIN, 10));
@@ -747,17 +767,14 @@ public class WalkingScreen extends JPanel implements KeyListener {
 
     // ── Mouse ─────────────────────────────────────────────────────────────────
 
-    @Override public void addNotify() {
-        super.addNotify();
+    private void registerMouseListener() {
         addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 int sw=getWidth(), x=e.getX(), y=e.getY();
                 if (y<5||y>31) return;
-                if      (x>=sw-370&&x<=sw-290) window.showPokedex();
-                else if (x>=sw-280&&x<=sw-225) showParty();
-                else if (x>=sw-215&&x<=sw-167) doSave();
-                else if (x>=sw-157&&x<=sw-111) healParty();
-                else if (x>=sw- 99&&x<=sw- 44) openMart();
+                if      (x>=sw-255&&x<=sw-175) window.showPokedex();
+                else if (x>=sw-165&&x<=sw-107) showParty();
+                else if (x>=sw- 97&&x<=sw- 45) doSave();
                 else if (x>=sw- 36)            window.showScreen(GameWindow.SCREEN_MENU);
             }
         });
