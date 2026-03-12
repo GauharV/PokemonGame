@@ -46,8 +46,8 @@ public class WalkingScreen extends JPanel implements KeyListener {
     private static boolean isSolid(int t) {
         return t == T_TREE || t == T_WATER  || t == T_HOUSE    || t == T_ROCK
             || t == T_SIGN || t == T_HOUSE_DOOR
-            || t == T_CENTER_WALL || t == T_MART_WALL
-            || t == T_CENTER_DOOR || t == T_MART_DOOR;  // solid — face + ENTER to use
+            || t == T_CENTER_WALL || t == T_MART_WALL;
+        // T_CENTER_DOOR(16) and T_MART_DOOR(17) are WALKABLE — stepping on them triggers
     }
 
     // ── Sizes ─────────────────────────────────────────────────────────────────
@@ -169,6 +169,18 @@ public class WalkingScreen extends JPanel implements KeyListener {
             if (dest != null) { doTransition(dest); return; }
         }
 
+        // Pokémon Center door
+        if (tile == T_CENTER_DOOR) {
+            healParty();
+            return;
+        }
+
+        // Pokémart door
+        if (tile == T_MART_DOOR) {
+            openMart();
+            return;
+        }
+
         // Wild grass
         if (tile == T_GRASS || tile == T_FLOWER) {
             LocationDatabase.Location loc = LocationDatabase.getLocation(currentMapName);
@@ -246,50 +258,178 @@ public class WalkingScreen extends JPanel implements KeyListener {
         requestFocusInWindow();
     }
 
+    // ── In-game overlay (no JOptionPane — never steals focus) ─────────────────
+    // overlayMode: 0=none 1=center 2=mart 3=mart-qty
+    private int    overlayMode   = 0;
+    private int    martSel       = 0;   // 0=pokeball 1=greatball 2=ultraball
+    private int    martQty       = 1;
+    private String overlayMsg    = null; // confirmation/error message
+
     private void healParty() {
         gameState.healAllPokemon();
         SoundManager.play(SoundManager.SoundEffect.HEAL);
-        JOptionPane.showMessageDialog(this,
-                "Your Pokémon have been fully restored! ❤", "Pokémon Center", JOptionPane.PLAIN_MESSAGE);
-        requestFocusInWindow();
+        overlayMode = 1;
+        overlayMsg  = null;
+        repaint();
     }
 
     private void openMart() {
-        final int PB = 200, GB = 600, UB = 1200;
-        String[] opts = {
-            "Pokéball  $" + PB  + "  (×" + gameState.getPokeballs()  + ")",
-            "Great Ball $" + GB + "  (×" + gameState.getGreatballs() + ")",
-            "Ultra Ball $" + UB + "  (×" + gameState.getUltraballs() + ")",
-            "Leave"
-        };
-        String pick = (String) JOptionPane.showInputDialog(this,
-                "Pokémart — You have $" + gameState.getMoney(), "Pokémart",
-                JOptionPane.PLAIN_MESSAGE, null, opts, opts[0]);
-        requestFocusInWindow();
-        if (pick == null || pick.startsWith("Leave")) return;
+        martSel     = 0;
+        martQty     = 1;
+        overlayMode = 2;
+        overlayMsg  = null;
+        repaint();
+    }
 
-        int price;  String ballName;
-        if      (pick.startsWith("Pokéball"))  { price = PB; ballName = "Pokéball"; }
-        else if (pick.startsWith("Great Ball")){ price = GB; ballName = "Great Ball"; }
-        else                                   { price = UB; ballName = "Ultra Ball"; }
+    /** Draw the active overlay on top of the world */
+    private void drawOverlay(Graphics2D g, int sw, int sh) {
+        if (overlayMode == 0) return;
 
-        String qs = JOptionPane.showInputDialog(this, "How many " + ballName + "s?");
-        requestFocusInWindow();
-        if (qs == null) return;
-        try {
-            int qty = Integer.parseInt(qs.trim());
-            int tot = price * qty;
-            if (qty <= 0 || gameState.getMoney() < tot) {
-                JOptionPane.showMessageDialog(this, "Not enough money!", "Pokémart", JOptionPane.WARNING_MESSAGE);
-                return;
+        // Dim background
+        g.setColor(new Color(0, 0, 0, 160));
+        g.fillRect(0, 0, sw, sh);
+
+        int bx = sw/2 - 220, by = sh/2 - 140, bw = 440, bh = 280;
+        g.setColor(new Color(20, 30, 50, 240));
+        g.fillRoundRect(bx, by, bw, bh, 16, 16);
+        g.setColor(new Color(80, 140, 200));
+        g.setStroke(new BasicStroke(2));
+        g.drawRoundRect(bx, by, bw, bh, 16, 16);
+
+        if (overlayMode == 1) drawCenterOverlay(g, bx, by, bw, bh);
+        else if (overlayMode == 2) drawMartOverlay(g, bx, by, bw, bh);
+        else if (overlayMode == 3) drawMartQtyOverlay(g, bx, by, bw, bh);
+    }
+
+    private void drawCenterOverlay(Graphics2D g, int bx, int by, int bw, int bh) {
+        g.setFont(new Font("Arial Black", Font.BOLD, 16));
+        g.setColor(new Color(120, 200, 255));
+        drawCenteredStr(g, "✚ POKÉMON CENTER", bx + bw/2, by + 40);
+        g.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        g.setColor(Color.WHITE);
+        drawCenteredStr(g, "Your Pokémon have been fully healed!", bx + bw/2, by + 90);
+        // Party preview
+        int px = bx + 30;
+        for (Pokemon p : gameState.getParty()) {
+            g.setColor(new Color(40, 80, 40));
+            g.fillRoundRect(px, by + 110, 55, 55, 8, 8);
+            g.setColor(new Color(80, 200, 80));
+            g.setFont(new Font("SansSerif", Font.BOLD, 9));
+            drawCenteredStr(g, p.getName(), px + 27, by + 154);
+            g.setColor(new Color(50, 220, 80));
+            g.setFont(new Font("SansSerif", Font.BOLD, 11));
+            drawCenteredStr(g, "HP ✓", px + 27, by + 143);
+            px += 65;
+            if (px > bx + bw - 60) break;
+        }
+        g.setFont(new Font("Arial Black", Font.BOLD, 12));
+        g.setColor(new Color(100, 200, 100));
+        g.fillRoundRect(bx + bw/2 - 60, by + bh - 50, 120, 30, 8, 8);
+        g.setColor(Color.WHITE);
+        drawCenteredStr(g, "OK  [ENTER]", bx + bw/2, by + bh - 29);
+    }
+
+    private static final String[] BALL_NAMES   = {"Pokéball", "Great Ball", "Ultra Ball"};
+    private static final int[]    BALL_PRICES  = {200, 600, 1200};
+
+    private void drawMartOverlay(Graphics2D g, int bx, int by, int bw, int bh) {
+        g.setFont(new Font("Arial Black", Font.BOLD, 16));
+        g.setColor(new Color(255, 200, 50));
+        drawCenteredStr(g, "✦ POKÉMART", bx + bw/2, by + 40);
+        g.setFont(new Font("SansSerif", Font.BOLD, 12));
+        g.setColor(new Color(180, 220, 255));
+        drawCenteredStr(g, "Money: $" + gameState.getMoney(), bx + bw/2, by + 65);
+
+        int[] owned = {gameState.getPokeballs(), gameState.getGreatballs(), gameState.getUltraballs()};
+        for (int i = 0; i < 3; i++) {
+            int ry = by + 90 + i * 50;
+            boolean sel = martSel == i;
+            g.setColor(sel ? new Color(50, 80, 140) : new Color(30, 45, 70));
+            g.fillRoundRect(bx + 30, ry, bw - 60, 38, 8, 8);
+            if (sel) { g.setColor(new Color(100, 160, 255)); g.setStroke(new BasicStroke(2));
+                       g.drawRoundRect(bx + 30, ry, bw - 60, 38, 8, 8); g.setStroke(new BasicStroke(1)); }
+            g.setFont(new Font("SansSerif", Font.BOLD, 13));
+            g.setColor(Color.WHITE);
+            g.drawString(BALL_NAMES[i], bx + 50, ry + 24);
+            g.setColor(new Color(255, 215, 0));
+            g.drawString("$" + BALL_PRICES[i], bx + bw/2 - 20, ry + 24);
+            g.setColor(new Color(150, 200, 150));
+            g.drawString("Own: " + owned[i], bx + bw - 110, ry + 24);
+        }
+        if (overlayMsg != null) {
+            g.setFont(new Font("SansSerif", Font.ITALIC, 11));
+            g.setColor(new Color(255, 120, 120));
+            drawCenteredStr(g, overlayMsg, bx + bw/2, by + bh - 55);
+        }
+        g.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        g.setColor(new Color(150, 160, 180));
+        drawCenteredStr(g, "↑↓ Select   ENTER Buy   ESC Leave", bx + bw/2, by + bh - 18);
+    }
+
+    private void drawMartQtyOverlay(Graphics2D g, int bx, int by, int bw, int bh) {
+        g.setFont(new Font("Arial Black", Font.BOLD, 15));
+        g.setColor(new Color(255, 200, 50));
+        drawCenteredStr(g, "Buy " + BALL_NAMES[martSel], bx + bw/2, by + 60);
+        g.setFont(new Font("SansSerif", Font.BOLD, 13));
+        g.setColor(new Color(180, 220, 255));
+        drawCenteredStr(g, "Price: $" + BALL_PRICES[martSel] + " each", bx + bw/2, by + 100);
+        g.setFont(new Font("Arial Black", Font.BOLD, 36));
+        g.setColor(Color.WHITE);
+        drawCenteredStr(g, "× " + martQty, bx + bw/2, by + 160);
+        int total = BALL_PRICES[martSel] * martQty;
+        g.setFont(new Font("SansSerif", Font.BOLD, 14));
+        g.setColor(total <= gameState.getMoney() ? new Color(100, 220, 100) : new Color(255, 100, 100));
+        drawCenteredStr(g, "Total: $" + total + "  (Have: $" + gameState.getMoney() + ")", bx + bw/2, by + 195);
+        g.setFont(new Font("SansSerif", Font.PLAIN, 10));
+        g.setColor(new Color(150, 160, 180));
+        drawCenteredStr(g, "←→ Qty   ENTER Confirm   ESC Back", bx + bw/2, by + bh - 18);
+    }
+
+    private void drawCenteredStr(Graphics2D g, String s, int cx, int y) {
+        FontMetrics fm = g.getFontMetrics();
+        g.drawString(s, cx - fm.stringWidth(s)/2, y);
+    }
+
+    /** Handle overlay key input — called first in keyPressed */
+    private boolean handleOverlayKey(int key) {
+        if (overlayMode == 0) return false;
+
+        if (overlayMode == 1) {  // Pokémon Center
+            if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_SPACE || key == KeyEvent.VK_ESCAPE) {
+                overlayMode = 0; repaint();
             }
-            gameState.spendMoney(tot);
-            if      (ballName.equals("Pokéball"))   gameState.addPokeballs(qty);
-            else if (ballName.equals("Great Ball"))  gameState.addGreatballs(qty);
-            else                                     gameState.addUltraballs(qty);
-            JOptionPane.showMessageDialog(this, "Bought " + qty + "× " + ballName + " for $" + tot + "!");
-        } catch (NumberFormatException ignored) {}
-        requestFocusInWindow();
+            return true;
+        }
+
+        if (overlayMode == 2) {  // Mart item select
+            if (key == KeyEvent.VK_UP    || key == KeyEvent.VK_W) { martSel = (martSel + 2) % 3; overlayMsg = null; repaint(); }
+            if (key == KeyEvent.VK_DOWN  || key == KeyEvent.VK_S) { martSel = (martSel + 1) % 3; overlayMsg = null; repaint(); }
+            if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_SPACE) { martQty = 1; overlayMode = 3; repaint(); }
+            if (key == KeyEvent.VK_ESCAPE) { overlayMode = 0; repaint(); }
+            return true;
+        }
+
+        if (overlayMode == 3) {  // Mart qty
+            if (key == KeyEvent.VK_RIGHT || key == KeyEvent.VK_D) { martQty = Math.min(martQty + 1, 99); repaint(); }
+            if (key == KeyEvent.VK_LEFT  || key == KeyEvent.VK_A) { martQty = Math.max(martQty - 1, 1);  repaint(); }
+            if (key == KeyEvent.VK_ESCAPE) { overlayMode = 2; repaint(); }
+            if (key == KeyEvent.VK_ENTER || key == KeyEvent.VK_SPACE) {
+                int total = BALL_PRICES[martSel] * martQty;
+                if (gameState.getMoney() < total) {
+                    overlayMsg = "Not enough money!"; overlayMode = 2; repaint();
+                } else {
+                    gameState.spendMoney(total);
+                    if      (martSel == 0) gameState.addPokeballs(martQty);
+                    else if (martSel == 1) gameState.addGreatballs(martQty);
+                    else                   gameState.addUltraballs(martQty);
+                    overlayMsg = "Bought " + martQty + "× " + BALL_NAMES[martSel] + "!";
+                    overlayMode = 2;
+                    repaint();
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     // =========================================================================
@@ -391,6 +531,9 @@ public class WalkingScreen extends JPanel implements KeyListener {
             g.fillRect(0, 0, sw, sh);
             g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
         }
+
+        // In-game Center / Mart overlay (drawn on top of everything)
+        drawOverlay(g, sw, sh);
     }
 
     // ── Tile drawing ──────────────────────────────────────────────────────────
@@ -642,6 +785,7 @@ public class WalkingScreen extends JPanel implements KeyListener {
     // ── Keys ──────────────────────────────────────────────────────────────────
 
     @Override public void keyPressed(KeyEvent e) {
+        if (handleOverlayKey(e.getKeyCode())) return;  // overlay consumes input
         heldKeys.add(e.getKeyCode());
         if (e.getKeyCode()==KeyEvent.VK_ENTER||e.getKeyCode()==KeyEvent.VK_SPACE) onInteract();
     }
