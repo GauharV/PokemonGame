@@ -21,7 +21,7 @@ git clone https://github.com/GauharV/PokemonGame.git
 cd PokemonGame
 ```
 
-### 2. Download sprites (one-time setup)
+### 2. Download sprites (one-time setup, If needed)
 
 Sprites are not committed to the repo. Run this once to download all 151 Pokémon images from PokéAPI:
 
