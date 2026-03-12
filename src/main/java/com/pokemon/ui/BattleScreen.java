@@ -184,40 +184,50 @@ public class BattleScreen extends JPanel {
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 
         // Sky gradient
-        GradientPaint sky = new GradientPaint(0, 0, new Color(30, 55, 110), 0, h, new Color(18, 32, 65));
-        g.setPaint(sky);
+        g.setPaint(new GradientPaint(0, 0, new Color(30, 55, 110), 0, h, new Color(18, 32, 65)));
         g.fillRect(0, 0, w, h);
 
-        // Ground
+        // Ground strip — middle of panel
+        int gY = (int)(h * 0.50);
         g.setColor(new Color(45, 75, 45));
-        g.fillRoundRect(20, h - 90, w - 40, 75, 24, 24);
+        g.fillRoundRect(60, gY, w - 120, 50, 16, 16);
         g.setColor(new Color(60, 100, 60));
-        g.fillRoundRect(20, h - 90, w - 40, 26, 12, 12);
+        g.fillRoundRect(60, gY, w - 120, 18, 10, 10);
 
-        // Enemy platform
-        g.setColor(new Color(80, 65, 45));
-        g.fillOval(480, 70, 320, 56);
-        g.setColor(new Color(105, 85, 58));
-        g.fillOval(486, 70, 308, 30);
+        // Sprite size
+        int ss = 170;
 
-        // Player platform
-        g.setColor(new Color(80, 65, 45));
-        g.fillOval(60, 205, 250, 48);
-        g.setColor(new Color(105, 85, 58));
-        g.fillOval(66, 205, 238, 26);
+        // Two separate ground platforms — classic diagonal layout
+        // Enemy: upper-RIGHT quadrant
+        int ePlatCX = (int)(w * 0.68);
+        int ePlatW  = (int)(w * 0.22);
+        int ePlatY  = (int)(h * 0.28);
+        g.setColor(new Color(55, 80, 55));
+        g.fillOval(ePlatCX - ePlatW/2, ePlatY, ePlatW, 32);
+        g.setColor(new Color(75, 110, 75));
+        g.fillOval(ePlatCX - ePlatW/2 + 3, ePlatY, ePlatW - 6, 14);
 
-        // Enemy Pokemon sprite (top-right)
         if (enemyPokemon != null) {
-            drawSprite(g, enemyImg, enemyPokemon.getId(),
-                    490 + shakeEnemy, 0, 220, 220, false, flashEnemy);
-            drawInfoBox(g, enemyPokemon, 20, 14, false);
+            int ex = ePlatCX - ss/2 + shakeEnemy;
+            int ey = ePlatY - ss + 8;
+            drawSprite(g, enemyImg, enemyPokemon.getId(), ex, ey, ss, ss, false, flashEnemy);
+            drawInfoBox(g, enemyPokemon, 18, 10, false);
         }
 
-        // Player Pokemon sprite (bottom-left) — mirrored for "back view"
+        // Player: lower-LEFT quadrant
+        int pPlatCX = (int)(w * 0.30);
+        int pPlatW  = (int)(w * 0.18);
+        int pPlatY  = (int)(h * 0.70);
+        g.setColor(new Color(55, 80, 55));
+        g.fillOval(pPlatCX - pPlatW/2, pPlatY, pPlatW, 28);
+        g.setColor(new Color(75, 110, 75));
+        g.fillOval(pPlatCX - pPlatW/2 + 3, pPlatY, pPlatW - 6, 12);
+
         if (playerPokemon != null) {
-            drawSprite(g, playerImg, playerPokemon.getId(),
-                    60 + shakePlayer, 140, 220, 220, true, flashPlayer);
-            drawInfoBox(g, playerPokemon, 460, 195, true);
+            int px = pPlatCX - ss/2 + shakePlayer;
+            int py = pPlatY - ss + 6;
+            drawSprite(g, playerImg, playerPokemon.getId(), px, py, ss, ss, true, flashPlayer);
+            drawInfoBox(g, playerPokemon, w / 2 + 20, (int)(h * 0.55), true);
         }
     }
 
